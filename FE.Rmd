@@ -1,0 +1,470 @@
+---
+title: "Eric's FE"
+output: html_document
+---
+
+```{r}
+library(dplyr) #0.8.5
+library(zoo) #1.8-8
+library(MESS) #0.5.6
+library(splus2R) #1.2-2
+```
+
+```{r}
+load("data.rda")
+data <- data.frame(data)
+```
+
+```{r}
+data %>% group_by(id) %>% tally()
+```
+
+
+
+```{r}
+# Convert BVP_HB to Heart Rate
+HB <- function(vec){
+  return(vec[length(vec)] - vec[1])
+}
+BVP_HB = c()
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  BVP_HB = c(BVP_HB, rollapply(subdata$HB_BVP, 241, HB, fill = NA))
+}
+data$BVP_HR <- BVP_HB
+```
+
+```{r}
+# Convert ECG_HB to Heart Rate
+ECG_HB = c()
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  ECG_HB = c(ECG_HB, rollapply(subdata$HB_ECG, 241, HB, fill = NA))
+}
+data$ECG_HR <- ECG_HB
+```
+
+```{r warning=FALSE}
+# Convert chest_Resp to Volume
+volume <- function(dat){
+  return(auc(x = seq(1, length(dat), 1), y = dat, absolutearea = TRUE))
+}
+Volume = c()
+for (i in 1:15){
+  print(i)
+  subdata = subset(data, id == i)
+  Volume = c(Volume, rollapply(subdata$chest_Resp, 241, volume, fill = NA))
+}
+data$Resp_Volume <- Volume
+```
+
+```{r}
+# Convert chest_Resp to Range
+get_range <- function(vec){
+  max_min = range(vec)
+  return(max_min[2]-max_min[1])
+}
+Resp_range = c()
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Resp_range = c(Resp_range, rollapply(subdata$chest_Resp, 240, get_range, fill = NA))
+}
+data$Resp_range <- Resp_range
+```
+
+```{r}
+# Convert chest_Resp to breaths in a minute
+get_breaths <- function(dat){
+  return(sum(peaks(dat, span = 9)))
+}
+breaths = c()
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  breaths = c(breaths, rollapply(subdata$chest_Resp, 240, get_breaths, fill = NA))
+}
+data$breath_rate <- breaths
+```
+
+```{r}
+# Store personal particulars
+ls = list()
+ls[[1]] = data.frame(matrix(c(27, 175, 80, 1), nrow = 1, ncol = 4))
+ls[[2]] = data.frame(matrix(c(27, 173, 69, 1), nrow = 1, ncol = 4))
+ls[[3]] = data.frame(matrix(c(25, 175, 90, 1), nrow = 1, ncol = 4))
+ls[[4]] = data.frame(matrix(c(35, 189, 80, 1), nrow = 1, ncol = 4))
+ls[[5]] = data.frame(matrix(c(27, 170, 66, 1), nrow = 1, ncol = 4))
+ls[[6]] = data.frame(matrix(c(28, 184, 74, 1), nrow = 1, ncol = 4))
+ls[[7]] = data.frame(matrix(c(27, 172, 64, 0), nrow = 1, ncol = 4))
+ls[[8]] = data.frame(matrix(c(26, 181, 75, 1), nrow = 1, ncol = 4))
+ls[[9]] = data.frame(matrix(c(28, 178, 76, 1), nrow = 1, ncol = 4))
+ls[[10]] = data.frame(matrix(c(26, 171, 54, 0), nrow = 1, ncol = 4))
+ls[[11]] = data.frame(matrix(c(28, 181, 82, 1), nrow = 1, ncol = 4))
+ls[[12]] = data.frame(matrix(c(27, 180, 80, 1), nrow = 1, ncol = 4))
+ls[[13]] = data.frame(matrix(c(28, 186, 83, 1), nrow = 1, ncol = 4))
+ls[[14]] = data.frame(matrix(c(24, 184, 69, 1), nrow = 1, ncol = 4))
+ls[[15]] = data.frame(matrix(c(29, 165, 55, 0), nrow = 1, ncol = 4))
+for (i in 1:15){
+  colnames(ls[[i]]) = c("Age", "Height", "Weight", "Gender")
+}
+```
+
+```{r}
+# Add personal particulars to data
+new_data = data.frame()
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  subdata$Age = ls[[i]]$Age
+  subdata$Height = ls[[i]]$Height
+  subdata$Weight = ls[[i]]$Weight
+  subdata$Gender = ls[[i]]$Gender
+  new_data = rbind(new_data, subdata)
+}
+data <- new_data
+```
+
+```{r}
+#ACC chest sliding window calculations
+ACC_chest_mean = c()
+ACC_chest_sd = c()
+ACC_wrist_mean = c()
+ACC_wrist_sd = c()
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  ACC_chest_mean = c(ACC_chest_mean, rollapply(subdata$chest_ACC, 240, mean, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  ACC_chest_sd = c(ACC_chest_sd, rollapply(subdata$chest_ACC, 240, sd, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  ACC_wrist_mean = c(ACC_wrist_mean, rollapply(subdata$wrist_ACC, 240, mean, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  ACC_wrist_sd = c(ACC_wrist_sd, rollapply(subdata$wrist_ACC, 240, sd, fill = NA))
+}
+
+data$ACC_chest_mean <- ACC_chest_mean
+
+data$ACC_chest_sd <- ACC_chest_sd
+
+data$ACC_wrist_mean <- ACC_wrist_mean
+
+data$ACC_wrist_sd <- ACC_wrist_sd
+```
+
+```{r}
+#slope function
+slope<-function(vec){
+  return(vec[length(vec)]-vec[1])
+}
+```
+
+```{r}
+#ECG sliding window calculation
+
+ECG_mean <-c()
+ECG_sd<-c()
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  ECG_mean = c(ECG_mean, rollapply(subdata$chest_ECG, 240, mean, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  ECG_sd = c(ECG_sd, rollapply(subdata$chest_ECG,240, sd, fill = NA))
+  #ECG_sd = c(ECG_sd, rollapply(subdata$chest_ECG,5, slope, fill = NA))
+}
+
+data$ECG_mean <- ECG_mean
+data$ECG_sd <- ECG_sd
+
+```
+
+```{r}
+#BVP chest sliding window calculations
+BVP_mean = c()
+BVP_sd = c()
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  BVP_mean = c(BVP_mean, rollapply(subdata$wrist_BVP, 240, mean, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  BVP_sd = c(BVP_sd, rollapply(subdata$wrist_BVP, 240,sd, fill = NA))
+  #BVP_sd = c(BVP_sd, rollapply(subdata$wrist_BVP, 240,slope, fill = NA))
+}
+
+data$BVP_mean <- BVP_mean
+
+data$BVP_sd <-BVP_sd
+
+```
+
+```{r}
+#EDA chest sliding window calculations
+EDA_chest_mean = c()
+EDA_chest_sd = c()
+EDA_chest_min = c()
+EDA_chest_max = c()
+EDA_chest_range = c()
+EDA_chest_slope = c()
+EDA_wrist_mean = c()
+EDA_wrist_sd = c()
+EDA_wrist_min = c()
+EDA_wrist_max = c()
+EDA_wrist_range = c()
+EDA_wrist_slope = c()
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_chest_mean = c(EDA_chest_mean, rollapply(subdata$chest_EDA, 240, mean, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_chest_sd = c(EDA_chest_sd, rollapply(subdata$chest_EDA, 240, sd, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_chest_min = c(EDA_chest_min, rollapply(subdata$chest_EDA, 240, min, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_chest_max = c(EDA_chest_max, rollapply(subdata$chest_EDA, 240, max, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_chest_range = c(EDA_chest_range, rollapply(subdata$chest_EDA, 240, get_range, fill = NA))
+}
+
+# All slopes shall be 1s
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_chest_slope = c(EDA_chest_slope, rollapply(subdata$chest_EDA, 5, slope, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_wrist_mean = c(EDA_wrist_mean, rollapply(subdata$wrist_EDA, 240, mean, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_wrist_sd = c(EDA_wrist_sd, rollapply(subdata$wrist_EDA, 240, sd, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_wrist_min = c(EDA_wrist_min, rollapply(subdata$wrist_EDA, 240, min, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_wrist_max = c(EDA_wrist_max, rollapply(subdata$wrist_EDA, 240, max, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_wrist_range = c(EDA_wrist_range, rollapply(subdata$wrist_EDA, 240, get_range, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EDA_wrist_slope = c(EDA_wrist_slope, rollapply(subdata$wrist_EDA, 5, slope, fill = NA))
+}
+
+data$EDA_chest_mean <- EDA_chest_mean
+
+data$EDA_chest_sd <- EDA_chest_sd
+
+data$EDA_chest_min <- EDA_chest_min
+
+data$EDA_chest_max <- EDA_chest_max
+
+data$EDA_chest_range <- EDA_chest_range
+
+data$EDA_chest_slope <- EDA_chest_slope
+
+data$EDA_wrist_mean <- EDA_wrist_mean
+
+data$EDA_wrist_sd <- EDA_wrist_sd
+
+data$EDA_wrist_min <- EDA_wrist_min
+
+data$EDA_wrist_max <- EDA_wrist_max
+
+data$EDA_wrist_range <- EDA_wrist_range
+
+data$EDA_wrist_slope <- EDA_wrist_slope
+```
+
+```{r}
+#EMG sliding window calculations
+EMG_mean <- c()
+EMG_sd <- c()
+EMG_range <- c()
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EMG_mean = c(EMG_mean, rollapply(subdata$chest_EMG, 240, mean, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EMG_sd = c(EMG_sd, rollapply(subdata$chest_EMG, 240, sd, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  EMG_range = c(EMG_range, rollapply(subdata$chest_EMG, 240, get_range, fill = NA))
+}
+
+data$EMG_mean <- EMG_mean
+data$EMG_sd <- EMG_sd
+data$EMG_range <- EMG_range
+```
+
+```{r}
+#Temp sliding window calculations
+Temp_chest_mean<-c()
+Temp_chest_sd<-c()
+Temp_chest_min<-c()
+Temp_chest_max<-c()
+Temp_chest_range<-c()
+Temp_chest_slope<-c()
+
+Temp_wrist_mean<-c()
+Temp_wrist_sd<-c()
+Temp_wrist_min<-c()
+Temp_wrist_max<-c()
+Temp_wrist_range<-c()
+Temp_wrist_slope<-c()
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_chest_mean = c(Temp_chest_mean, rollapply(subdata$chest_Temp, 240, mean, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_chest_sd = c(Temp_chest_sd, rollapply(subdata$chest_Temp, 240, sd, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_chest_min = c(Temp_chest_min, rollapply(subdata$chest_Temp, 240, min, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_chest_max = c(Temp_chest_max, rollapply(subdata$chest_Temp, 240, max, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_chest_range = c(Temp_chest_range, rollapply(subdata$chest_Temp, 240, get_range, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_chest_slope = c(Temp_chest_slope, rollapply(subdata$chest_Temp, 5, slope, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_wrist_mean = c(Temp_wrist_mean, rollapply(subdata$wrist_TEMP, 240, mean, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_wrist_sd = c(Temp_wrist_sd, rollapply(subdata$wrist_TEMP, 240, sd, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_wrist_min = c(Temp_wrist_min, rollapply(subdata$wrist_TEMP, 240, min, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_wrist_max = c(Temp_wrist_max, rollapply(subdata$wrist_TEMP, 240, max, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_wrist_range = c(Temp_wrist_range, rollapply(subdata$wrist_TEMP, 240, get_range, fill = NA))
+}
+
+for (i in 1:15){
+  subdata = subset(data, id == i)
+  Temp_wrist_slope = c(Temp_wrist_slope, rollapply(subdata$wrist_TEMP, 5, slope, fill = NA))
+}
+
+data$Temp_chest_mean <- Temp_chest_mean
+data$Temp_chest_sd <- Temp_chest_sd
+data$Temp_chest_min <- Temp_chest_min
+data$Temp_chest_max <- Temp_chest_max
+data$Temp_chest_range <- Temp_chest_range
+data$Temp_chest_slope <- Temp_chest_slope
+data$Temp_wrist_mean <- Temp_wrist_mean
+data$Temp_wrist_sd <- Temp_wrist_sd
+data$Temp_wrist_min <- Temp_wrist_min
+data$Temp_wrist_max <- Temp_wrist_max
+data$Temp_wrist_range <- Temp_wrist_range
+data$Temp_wrist_slope <- Temp_wrist_slope
+```
+
+# Reorder, Clean, and Save Data
+
+```{r}
+colnames(data)
+```
+
+## Desired Order:
+### id, label, personal particulars, wrist (ACC, BVP, EDA, TEMP), chest(ACC, ECG, EDA, EMG, RESP, TEMP)
+
+```{r}
+new_data = data[,c("id", "label", "Age", "Height", "Weight", "Gender",
+  "ACC_wrist_mean", "ACC_wrist_sd", 
+  "BVP_mean", "BVP_sd", "BVP_HR", 
+  "EDA_wrist_mean", "EDA_wrist_sd", "EDA_wrist_min", "EDA_wrist_max", "EDA_wrist_range",
+  "EDA_wrist_slope",
+  "Temp_wrist_mean", "Temp_wrist_sd", "Temp_wrist_min", "Temp_wrist_max", "Temp_wrist_range",
+  "Temp_wrist_slope", 
+  "ACC_chest_mean", "ACC_chest_sd", 
+  "ECG_mean", "ECG_sd", "ECG_HR",
+  "EDA_chest_mean", "EDA_chest_sd", "EDA_chest_min", "EDA_chest_max", "EDA_chest_range",
+  "EDA_chest_slope",
+  "EMG_mean", "EMG_sd", "EMG_range",
+  "Resp_Volume", "Resp_range", "breath_rate",
+  "Temp_chest_mean", "Temp_chest_sd", "Temp_chest_min", "Temp_chest_max", "Temp_chest_range",
+  "Temp_chest_slope")]
+```
+
+```{r}
+new_data = subset(new_data, label == 1 | label == 2 | label == 3 | label == 4)
+```
+
+```{r}
+# Remove rows with NAs 
+nrow(new_data)
+new_data <- new_data[rowSums(is.na(new_data)) == 0,]
+nrow(new_data)
+```
+
+* We note that there are no rows with NAs
+
+```{r}
+save(new_data, file = "final_data.rda")
+```
+
